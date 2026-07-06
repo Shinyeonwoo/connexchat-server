@@ -1,0 +1,17 @@
+{
+  "name": "connexchat-server",
+  "version": "1.0.0",
+  "description": "ConnexChat 테스트 서버 (Module B + C: REST API + WebSocket)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}

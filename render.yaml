@@ -1,0 +1,9 @@
+# Render.com 무료 배포 설정 (Blueprint)
+# GitHub 에 이 폴더를 올린 뒤 Render 에서 "New + → Blueprint" 로 이 저장소를 고르면 자동 배포됨.
+services:
+  - type: web
+    name: connexchat-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
