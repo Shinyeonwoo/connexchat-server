@@ -279,6 +279,17 @@ app.post('/demo/chatrooms', (req, res) => {
   ok(res, room, '채팅방이 만들어졌습니다.');
 });
 
+// 데모 채팅방 삭제
+app.delete('/demo/chatrooms/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const idx = demoRoomList.findIndex((r) => r.id === id);
+  if (idx === -1) return fail(res, 400, '채팅방을 찾을 수 없습니다.');
+  demoRoomList.splice(idx, 1);
+  delete demoChatMessages[id];
+  delete demoChatClients[id];
+  ok(res, { id }, '채팅방이 삭제되었습니다.');
+});
+
 app.get('/', (req, res) => res.send('ConnexChat 서버 동작 중 ✅ (Module B + C, WebSocket 포함)'));
 
 // ════════════════════════════════════════════════════════════
