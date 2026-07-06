@@ -262,6 +262,23 @@ app.post('/messages/send', auth, (req, res) => {
   ok(res, msg, '메시지가 전송되었습니다.');
 });
 
+// ════════════════════════════════════════════════════════════
+// [수업용 예제 11·12] 데모 채팅방 REST (인증 불필요)
+// ════════════════════════════════════════════════════════════
+
+// 데모 채팅방 목록
+app.get('/demo/chatrooms', (req, res) => ok(res, demoRoomList));
+
+// 데모 채팅방 만들기
+app.post('/demo/chatrooms', (req, res) => {
+  const { roomName } = req.body || {};
+  if (!roomName) return fail(res, 400, '채팅방 이름을 입력해주세요.');
+  const room = { id: demoNextRoomId++, roomName };
+  demoRoomList.push(room);
+  demoChatMessages[room.id] = [];
+  ok(res, room, '채팅방이 만들어졌습니다.');
+});
+
 app.get('/', (req, res) => res.send('ConnexChat 서버 동작 중 ✅ (Module B + C, WebSocket 포함)'));
 
 // ════════════════════════════════════════════════════════════
@@ -277,6 +294,13 @@ const unreadClients = new Set();       // /ws/unread 접속들
 const roomClients = new Map();         // roomId -> Set(ws)
 const demoRooms = new Map();           // (수업용) 방이름 -> Set(ws)
 const practiceClients = new Set();     // (수업용) /ws/practice 접속들
+
+// (수업용 예제 11·12) 데모 채팅방 - 인증 없이, 기록 저장됨
+let demoNextRoomId = 1;
+const demoRoomList = [];               // [ {id, roomName} ]
+const demoChatMessages = {};           // roomId -> [ {id, sender, content, time} ]
+const demoChatClients = {};            // roomId -> Set(ws)
+let demoMsgSeq = 1;
 
 function broadcastUnread() {
   const payload = JSON.stringify({ name: 'Unread Messages Update', response: { event: 'unread_messages', data: buildUnread() } });
@@ -424,6 +448,40 @@ server.on('upgrade', (req, socket, head) => {
         }, 1000);
       });
       ws.on('close', () => practiceClients.delete(ws));
+    });
+    return;
+  }
+
+  // 5) (예제 11·12) 데모 채팅방: 기록 저장 + 이름 포함  → /ws/demo/chatrooms/{id}?name=이름
+  const dm = path.match(/^\/ws\/demo\/chatrooms\/(\d+)$/);
+  if (dm) {
+    const roomId = Number(dm[1]);
+    const name = url.searchParams.get('name') || '익명';
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      demoChatMessages[roomId] = demoChatMessages[roomId] || [];
+      if (!demoChatClients[roomId]) demoChatClients[roomId] = new Set();
+      demoChatClients[roomId].add(ws);
+
+      // 최초 연결: 저장돼 있던 지난 대화 목록을 보냄 (기록 유지!)
+      ws.send(JSON.stringify({
+        event: 'connected',
+        data: { messages: demoChatMessages[roomId] },
+      }));
+
+      ws.on('message', (raw) => {
+        let obj; try { obj = JSON.parse(raw.toString()); } catch (_) { return; }
+        if (obj.event !== 'send_message') return;
+        const content = obj.body?.content || '';
+        if (!content) return;
+        const msg = { id: demoMsgSeq++, sender: name, content, time: nowTime() };
+        demoChatMessages[roomId].push(msg); // ★ 저장 → 다음에 들어와도 남아있음
+        const payload = JSON.stringify({ event: 'new_message', data: msg });
+        for (const c of demoChatClients[roomId]) {
+          if (c.readyState === c.OPEN) c.send(payload);
+        }
+      });
+
+      ws.on('close', () => demoChatClients[roomId]?.delete(ws));
     });
     return;
   }
