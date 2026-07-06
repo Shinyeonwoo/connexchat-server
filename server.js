@@ -275,6 +275,8 @@ const wss = new WebSocketServer({ noServer: true });
 
 const unreadClients = new Set();       // /ws/unread 접속들
 const roomClients = new Map();         // roomId -> Set(ws)
+const demoRooms = new Map();           // (수업용) 방이름 -> Set(ws)
+const practiceClients = new Set();     // (수업용) /ws/practice 접속들
 
 function broadcastUnread() {
   const payload = JSON.stringify({ name: 'Unread Messages Update', response: { event: 'unread_messages', data: buildUnread() } });
@@ -341,6 +343,87 @@ server.on('upgrade', (req, socket, head) => {
       });
 
       ws.on('close', () => roomClients.get(roomId)?.delete(ws));
+    });
+    return;
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // [WebSocket 수업용 데모 엔드포인트] (인증 불필요)
+  // ──────────────────────────────────────────────────────────
+
+  // 1) 에코: 보낸 글자를 그대로 돌려준다  → /ws/echo
+  if (path === '/ws/echo') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.on('message', (raw) => ws.send(raw.toString()));
+    });
+    return;
+  }
+
+  // 2) 시간 방송: 1초마다 현재 시간을 보내준다  → /ws/time
+  if (path === '/ws/time') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      const timer = setInterval(() => {
+        if (ws.readyState === ws.OPEN) ws.send(new Date().toLocaleTimeString('ko-KR'));
+      }, 1000);
+      ws.on('close', () => clearInterval(timer));
+    });
+    return;
+  }
+
+  // 3) 방 브로드캐스트: 같은 방(name)에 접속한 모두에게 전달 + 접속자 수  → /ws/room?name=xxx
+  if (path === '/ws/room') {
+    const roomName = url.searchParams.get('name') || 'lobby';
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      if (!demoRooms.has(roomName)) demoRooms.set(roomName, new Set());
+      const set = demoRooms.get(roomName);
+      set.add(ws);
+      const announce = () => {
+        const payload = JSON.stringify({ type: 'members', count: set.size });
+        for (const c of set) if (c.readyState === c.OPEN) c.send(payload);
+      };
+      announce(); // 접속 시 인원수 알림
+      ws.on('message', (raw) => {
+        const payload = JSON.stringify({ type: 'chat', text: raw.toString() });
+        for (const c of set) if (c.readyState === c.OPEN) c.send(payload);
+      });
+      ws.on('close', () => { set.delete(ws); announce(); });
+    });
+    return;
+  }
+
+  // 4) 모듈 C 연습: 최초 연결 시 지난 메시지(connected) + 보내면(send_message)
+  //    새 메시지(new_message) 를 방송하고, 1초 뒤 상대(봇)가 자동 응답  → /ws/practice
+  if (path === '/ws/practice') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      practiceClients.add(ws);
+      // 최초 1회: 지난 메시지 목록
+      ws.send(JSON.stringify({
+        event: 'connected',
+        data: {
+          messages: [
+            { id: 1, sender: '김코딩', content: '안녕하세요! 환영합니다.', isMine: false },
+            { id: 2, sender: '나', content: '안녕하세요~', isMine: true },
+          ],
+        },
+      }));
+      let seq = 100;
+      ws.on('message', (raw) => {
+        let obj; try { obj = JSON.parse(raw.toString()); } catch (_) { return; }
+        if (obj.event !== 'send_message') return;
+        const content = obj.body?.content || '';
+        if (!content) return;
+        // 내가 보낸 메시지 방송
+        const mine = { id: seq++, sender: '나', content, isMine: true };
+        const payload = JSON.stringify({ event: 'new_message', data: mine });
+        for (const c of practiceClients) if (c.readyState === c.OPEN) c.send(payload);
+        // 1초 뒤 상대(봇) 자동 응답
+        setTimeout(() => {
+          const reply = { id: seq++, sender: '상대', content: `"${content}" 잘 받았어요! 👍`, isMine: false };
+          const p2 = JSON.stringify({ event: 'new_message', data: reply });
+          for (const c of practiceClients) if (c.readyState === c.OPEN) c.send(p2);
+        }, 1000);
+      });
+      ws.on('close', () => practiceClients.delete(ws));
     });
     return;
   }
