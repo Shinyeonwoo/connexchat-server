@@ -296,9 +296,9 @@ app.delete('/demo/chatrooms/:id', (req, res) => {
 //   (+ 미니 로그인: /study/login → /study/secret 는 토큰 필요)
 // ════════════════════════════════════════════════════════════
 let studyFruits = [
-  { id: 1, name: '사과', price: 1000 },
-  { id: 2, name: '바나나', price: 500 },
-  { id: 3, name: '포도', price: 3000 },
+  { id: 1, name: 'Apple', price: 1000 },
+  { id: 2, name: 'Banana', price: 500 },
+  { id: 3, name: 'Grape', price: 3000 },
 ];
 let studyNextId = 4;
 const STUDY_TOKEN = 'study-token-1234';
