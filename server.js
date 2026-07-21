@@ -290,6 +290,84 @@ app.delete('/demo/chatrooms/:id', (req, res) => {
   ok(res, { id }, '채팅방이 삭제되었습니다.');
 });
 
+// ════════════════════════════════════════════════════════════
+// [수업 연습용 API] /study/*  — 인증 없이 쓰는 쉬운 예제 API
+//   과일 목록으로 GET / POST / PUT / DELETE 를 연습한다.
+//   (+ 미니 로그인: /study/login → /study/secret 는 토큰 필요)
+// ════════════════════════════════════════════════════════════
+let studyFruits = [
+  { id: 1, name: '사과', price: 1000 },
+  { id: 2, name: '바나나', price: 500 },
+  { id: 3, name: '포도', price: 3000 },
+];
+let studyNextId = 4;
+const STUDY_TOKEN = 'study-token-1234';
+
+// 1) 인사 한마디 (가장 단순한 GET)
+app.get('/study/hello', (req, res) => ok(res, { message: '안녕하세요! 서버입니다.' }));
+
+// 2) 서버의 현재 시간
+app.get('/study/time', (req, res) => ok(res, { now: new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) }));
+
+// 3) 과일 목록 (+ ?search=글자 로 검색)
+app.get('/study/fruits', (req, res) => {
+  const search = req.query.search;
+  const list = search ? studyFruits.filter((f) => f.name.includes(search)) : studyFruits;
+  ok(res, list);
+});
+
+// 4) 과일 한 개 상세 (경로 파라미터)
+app.get('/study/fruits/:id', (req, res) => {
+  const fruit = studyFruits.find((f) => f.id === Number(req.params.id));
+  if (!fruit) return fail(res, 404, '그 번호의 과일이 없습니다.');
+  ok(res, fruit);
+});
+
+// 5) 과일 추가 (POST)
+app.post('/study/fruits', (req, res) => {
+  const { name, price } = req.body || {};
+  if (!name) return fail(res, 400, '과일 이름(name)을 보내주세요.');
+  const fruit = { id: studyNextId++, name, price: Number(price) || 0 };
+  studyFruits.push(fruit);
+  ok(res, fruit, '과일이 추가되었습니다.');
+});
+
+// 6) 과일 수정 (PUT)
+app.put('/study/fruits/:id', (req, res) => {
+  const fruit = studyFruits.find((f) => f.id === Number(req.params.id));
+  if (!fruit) return fail(res, 404, '그 번호의 과일이 없습니다.');
+  const { name, price } = req.body || {};
+  if (name) fruit.name = name;
+  if (price !== undefined) fruit.price = Number(price);
+  ok(res, fruit, '과일이 수정되었습니다.');
+});
+
+// 7) 과일 삭제 (DELETE)
+app.delete('/study/fruits/:id', (req, res) => {
+  const idx = studyFruits.findIndex((f) => f.id === Number(req.params.id));
+  if (idx === -1) return fail(res, 404, '그 번호의 과일이 없습니다.');
+  const removed = studyFruits.splice(idx, 1)[0];
+  ok(res, removed, '과일이 삭제되었습니다.');
+});
+
+// 8) 미니 로그인 (토큰 연습용)
+app.post('/study/login', (req, res) => {
+  const { email, password } = req.body || {};
+  if (email === 'student@test.com' && password === '1234') {
+    return ok(res, { token: STUDY_TOKEN }, '로그인 성공');
+  }
+  fail(res, 401, '이메일 또는 비밀번호가 틀렸습니다.');
+});
+
+// 9) 비밀 정보 (토큰이 있어야 볼 수 있다)
+app.get('/study/secret', (req, res) => {
+  const auth = req.headers.authorization || '';
+  if (auth !== `Bearer ${STUDY_TOKEN}`) {
+    return fail(res, 401, '토큰이 없거나 틀렸습니다. (Authorization: Bearer 토큰)');
+  }
+  ok(res, { secret: '비밀 메시지: 오늘 급식은 치킨입니다.' });
+});
+
 app.get('/', (req, res) => res.send('ConnexChat 서버 동작 중 ✅ (Module B + C, WebSocket 포함)'));
 
 // ════════════════════════════════════════════════════════════
