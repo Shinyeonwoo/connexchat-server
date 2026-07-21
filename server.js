@@ -384,6 +384,12 @@ const roomClients = new Map();         // roomId -> Set(ws)
 const demoRooms = new Map();           // (수업용) 방이름 -> Set(ws)
 const practiceClients = new Set();     // (수업용) /ws/practice 접속들
 
+// (수업 연습용 /ws/study/*)
+const studyClass = new Set();          // /ws/study/class 접속들
+const studyBoardClients = new Set();   // /ws/study/board 접속들
+const studyBoardMessages = [];         // 칠판 기록 (남는다!)
+let studyBoardSeq = 1;
+
 // (수업용 예제 11·12) 데모 채팅방 - 인증 없이, 기록 저장됨
 let demoNextRoomId = 1;
 const demoRoomList = [];               // [ {id, roomName} ]
@@ -463,6 +469,159 @@ server.on('upgrade', (req, socket, head) => {
   // ──────────────────────────────────────────────────────────
   // [WebSocket 수업용 데모 엔드포인트] (인증 불필요)
   // ──────────────────────────────────────────────────────────
+
+  // ──────────────────────────────────────────────────────────
+  // [수업 연습용 WebSocket] /ws/study/*  (인증 불필요)
+  // ──────────────────────────────────────────────────────────
+
+  // s1) 인사: 연결되면 환영 인사 한 번  → /ws/study/hello
+  if (path === '/ws/study/hello') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.send('환영합니다! 서버와 연결되었어요.');
+    });
+    return;
+  }
+
+  // s2) 시계: 1초마다 현재 시간  → /ws/study/clock
+  if (path === '/ws/study/clock') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      const timer = setInterval(() => {
+        if (ws.readyState === ws.OPEN)
+          ws.send(new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' }));
+      }, 1000);
+      ws.on('close', () => clearInterval(timer));
+    });
+    return;
+  }
+
+  // s3) 앵무새: 보낸 말을 따라한다  → /ws/study/parrot
+  if (path === '/ws/study/parrot') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.on('message', (raw) => ws.send(`앵무새: ${raw.toString()}`));
+    });
+    return;
+  }
+
+  // s4) 카운트다운 후 서버가 먼저 끊는다 (onDone 연습)  → /ws/study/kick
+  if (path === '/ws/study/kick') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      let n = 5;
+      ws.send('5초 뒤에 서버가 연결을 끊습니다!');
+      const timer = setInterval(() => {
+        n--;
+        if (ws.readyState !== ws.OPEN) return clearInterval(timer);
+        if (n > 0) ws.send(`${n}...`);
+        else { clearInterval(timer); ws.close(); }
+      }, 1000);
+      ws.on('close', () => clearInterval(timer));
+    });
+    return;
+  }
+
+  // s5) 카운터: 연결마다 보낸 개수를 세어준다  → /ws/study/counter
+  if (path === '/ws/study/counter') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      let count = 0;
+      ws.on('message', () => {
+        count++;
+        ws.send(`지금까지 ${count}개 보냈어요`);
+      });
+    });
+    return;
+  }
+
+  // s6) JSON 에코: event/data 형식으로 주고받기  → /ws/study/json
+  if (path === '/ws/study/json') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.send(JSON.stringify({ event: 'connected', data: { message: 'JSON 으로 대화해요!' } }));
+      ws.on('message', (raw) => {
+        let obj; try { obj = JSON.parse(raw.toString()); } catch (_) { return; }
+        const content = obj.body?.content || '';
+        ws.send(JSON.stringify({ event: 'echo', data: { content, length: content.length } }));
+      });
+    });
+    return;
+  }
+
+  // s7) 봇 채팅: 보내면 1초 뒤 봇이 답장  → /ws/study/bot
+  if (path === '/ws/study/bot') {
+    const BOT_REPLIES = [
+      '오~ 그렇군요!', '더 자세히 말해줄래요?', '완전 공감해요.',
+      '하하 재미있네요.', '그건 처음 들어봐요!', '좋은 생각이에요.',
+    ];
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      let n = 0;
+      ws.send(JSON.stringify({ event: 'new_message', data: { sender: '봇', content: '안녕하세요! 말을 걸어보세요.' } }));
+      ws.on('message', (raw) => {
+        let obj; try { obj = JSON.parse(raw.toString()); } catch (_) { return; }
+        if (obj.event !== 'send_message') return;
+        setTimeout(() => {
+          if (ws.readyState === ws.OPEN)
+            ws.send(JSON.stringify({ event: 'new_message', data: { sender: '봇', content: BOT_REPLIES[n++ % BOT_REPLIES.length] } }));
+        }, 1000);
+      });
+    });
+    return;
+  }
+
+  // s8) 알림 방송: 서버가 4초마다 먼저 알림을 보낸다  → /ws/study/notify
+  if (path === '/ws/study/notify') {
+    const NOTICES = [
+      { title: '새 메일', body: '김철수 님이 메일을 보냈습니다.' },
+      { title: '일정 알림', body: '10분 뒤 회의가 시작됩니다.' },
+      { title: '공지', body: '오늘 급식은 치킨입니다.' },
+      { title: '친구 요청', body: '이영희 님이 친구 요청을 보냈습니다.' },
+    ];
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      let n = 0;
+      const timer = setInterval(() => {
+        if (ws.readyState === ws.OPEN)
+          ws.send(JSON.stringify({ event: 'notify', data: NOTICES[n++ % NOTICES.length] }));
+      }, 4000);
+      ws.on('close', () => clearInterval(timer));
+    });
+    return;
+  }
+
+  // s9) 교실 방송: 같은 반(name) 모두에게 전달 + 인원수  → /ws/study/class?name=이름
+  if (path === '/ws/study/class') {
+    const myName = url.searchParams.get('name') || '익명';
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      studyClass.add(ws);
+      const announce = () => {
+        const payload = JSON.stringify({ event: 'members', data: { count: studyClass.size } });
+        for (const c of studyClass) if (c.readyState === c.OPEN) c.send(payload);
+      };
+      announce();
+      ws.on('message', (raw) => {
+        let obj; try { obj = JSON.parse(raw.toString()); } catch (_) { return; }
+        const payload = JSON.stringify({ event: 'chat', data: { sender: myName, content: obj.body?.content || '' } });
+        for (const c of studyClass) if (c.readyState === c.OPEN) c.send(payload);
+      });
+      ws.on('close', () => { studyClass.delete(ws); announce(); });
+    });
+    return;
+  }
+
+  // s10) 칠판: 기록이 남는 채팅 (모듈 C 패턴)  → /ws/study/board?name=이름
+  if (path === '/ws/study/board') {
+    const myName = url.searchParams.get('name') || '익명';
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      studyBoardClients.add(ws);
+      // 최초 연결: 지난 기록 전체 1회
+      ws.send(JSON.stringify({ event: 'connected', data: { messages: studyBoardMessages } }));
+      ws.on('message', (raw) => {
+        let obj; try { obj = JSON.parse(raw.toString()); } catch (_) { return; }
+        if (obj.event !== 'send_message') return;
+        const msg = { id: studyBoardSeq++, sender: myName, content: obj.body?.content || '', time: nowTime() };
+        studyBoardMessages.push(msg);
+        const payload = JSON.stringify({ event: 'new_message', data: msg });
+        for (const c of studyBoardClients) if (c.readyState === c.OPEN) c.send(payload);
+      });
+      ws.on('close', () => studyBoardClients.delete(ws));
+    });
+    return;
+  }
 
   // 1) 에코: 보낸 글자를 그대로 돌려준다  → /ws/echo
   if (path === '/ws/echo') {
