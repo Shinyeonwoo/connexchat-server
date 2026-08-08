@@ -368,6 +368,160 @@ app.get('/study/secret', (req, res) => {
   ok(res, { secret: '비밀 메시지: 오늘 급식은 치킨입니다.' });
 });
 
+// ════════════════════════════════════════════════════════════
+// [Vinyl Groove 연습 API] /vinyl/*  — 2026 과제(Module A) 명세와 동일
+//   실제 과제의 baseUrl(api.vinylgroove.com) 대신 쓰는 연습 서버.
+// ════════════════════════════════════════════════════════════
+const VG_EMAIL = 'test@example.com';
+const VG_PASSWORD = 'Test1234!';
+const vgImg = (seed) => `https://picsum.photos/seed/vinyl${seed}/400/400`;
+
+const VG_CONDITION_DESC = {
+  'SS': '미개봉 새상품. 완벽한 상태입니다.',
+  'M': 'Mint. 개봉했으나 새것과 다름없는 완벽한 상태입니다.',
+  'NM': 'Near Mint. 거의 새것에 가까운 상태로, 미세한 사용감만 있습니다.',
+  'EX': 'Excellent. 전체적으로 깨끗하며, 약간의 사용감이 있습니다.',
+  'VG+': 'Very Good Plus. 양호한 상태로, 재생에 문제가 없습니다.',
+  'VG': 'Very Good. 사용감이 있으나 재생에 큰 문제가 없습니다.',
+  'G': 'Good. 사용감이 많으나 재생은 가능합니다.',
+};
+
+const vgSellers = [
+  { id: 10, name: 'Analog Shop', email: 'analog@example.com', profileImage: vgImg('s10') },
+  { id: 11, name: 'Groove Store', email: 'groove@example.com', profileImage: vgImg('s11') },
+  { id: 12, name: 'LP Heaven', email: 'lpheaven@example.com', profileImage: vgImg('s12') },
+];
+
+const vgAlbums = [
+  ['Blonde', 'Frank Ocean', 'RNB_SOUL', 'M', 95000, 'DIRECT', 320],
+  ['The Velvet Underground & Nico', 'The Velvet Underground', 'ROCK', 'VG', 125000, 'DELIVERY', 280],
+  ['Loveless', 'My Bloody Valentine', 'ROCK', 'NM', 85000, 'BOTH', 250],
+  ['Random Access Memories', 'Daft Punk', 'ELECTRONIC', 'NM', 55000, 'DELIVERY', 240],
+  ['The Dark Side of the Moon', 'Pink Floyd', 'ROCK', 'VG+', 48000, 'DIRECT', 310],
+  ['Nevermind', 'Nirvana', 'ROCK', 'M', 45000, 'BOTH', 200],
+  ['Discovery', 'Daft Punk', 'ELECTRONIC', 'NM', 38000, 'DELIVERY', 190],
+  ['The Queen Is Dead', 'The Smiths', 'ROCK', 'VG+', 33000, 'DIRECT', 170],
+  ['Kind of Blue', 'Miles Davis', 'JAZZ', 'VG', 48000, 'BOTH', 260],
+  ['A Love Supreme', 'John Coltrane', 'JAZZ', 'NM', 62000, 'DELIVERY', 180],
+  ['Abbey Road', 'The Beatles', 'ROCK', 'M', 88000, 'DIRECT', 300],
+  ['Thriller', 'Michael Jackson', 'POP', 'NM', 58000, 'BOTH', 290],
+  ['Back in Black', 'AC/DC', 'ROCK', 'VG', 35000, 'DELIVERY', 150],
+  ['Illmatic', 'Nas', 'HIPHOP', 'M', 52000, 'DIRECT', 210],
+  ['To Pimp a Butterfly', 'Kendrick Lamar', 'HIPHOP', 'NM', 47000, 'BOTH', 230],
+  ['OK Computer', 'Radiohead', 'ROCK', 'VG+', 42000, 'DELIVERY', 270],
+  ['In Rainbows', 'Radiohead', 'ROCK', 'M', 51000, 'DIRECT', 220],
+  ['Purple Rain', 'Prince', 'POP', 'VG', 39000, 'BOTH', 185],
+  ['Rumours', 'Fleetwood Mac', 'ROCK', 'NM', 44000, 'DELIVERY', 265],
+  ['What\'s Going On', 'Marvin Gaye', 'RNB_SOUL', 'VG+', 41000, 'DIRECT', 175],
+  ['The Chronic', 'Dr. Dre', 'HIPHOP', 'VG', 36000, 'DELIVERY', 160],
+  ['Homework', 'Daft Punk', 'ELECTRONIC', 'G', 25000, 'BOTH', 120],
+  ['The Four Seasons', 'Vivaldi', 'CLASSICAL', 'VG+', 28000, 'DIRECT', 90],
+  ['Goldberg Variations', 'Glenn Gould', 'CLASSICAL', 'NM', 33000, 'DELIVERY', 110],
+  ['Pet Sounds', 'The Beach Boys', 'POP', 'VG', 46000, 'BOTH', 205],
+  ['Blue Train', 'John Coltrane', 'JAZZ', 'VG+', 43000, 'DIRECT', 140],
+  ['Let It Be', 'The Beatles', 'ROCK', 'VG', 40000, 'DELIVERY', 195],
+  ['Doolittle', 'Pixies', 'ROCK', 'NM', 37000, 'DIRECT', 130],
+  ['Selected Ambient Works', 'Aphex Twin', 'ELECTRONIC', 'M', 59000, 'BOTH', 165],
+  ['Original Soundtrack Collection', 'Various Artists', 'ETC', 'G', 15000, 'DIRECT', 60],
+];
+
+const vgProducts = vgAlbums.map(([albumName, artist, genre, condition, price, tradeMethod, likeCount], i) => ({
+  id: i + 1,
+  albumName, artist, genre, condition, price, tradeMethod, likeCount,
+  albumImage: vgImg(i + 1),
+  description: `${artist}의 ${albumName} LP입니다. 소중히 보관해온 음반입니다.`,
+  seller: vgSellers[i % vgSellers.length],
+  createdAt: new Date(Date.parse('2026-05-01T00:00:00Z') + i * 86400000).toISOString(),
+}));
+
+// 로그인 (검증 규칙: 필수/@/./6자/대문자/소문자)
+app.post('/vinyl/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+  const errors = [];
+  if (!email) errors.push({ code: 'REQUIRED', field: 'email', message: '이메일을 입력해주세요.' });
+  else {
+    const at = email.indexOf('@');
+    if (at < 0 || !email.includes('.') || (at > 0 && email.slice(0, at).includes('.')))
+      errors.push({ code: 'INVALID_FORMAT', field: 'email', message: '올바른 이메일 형식을 입력해주세요.' });
+  }
+  if (!password) errors.push({ code: 'REQUIRED', field: 'password', message: '비밀번호를 입력해주세요.' });
+  else if (password.length < 6) errors.push({ code: 'INVALID_LENGTH', field: 'password', message: '비밀번호는 6자 이상이어야 합니다.' });
+  else if (!/[A-Z]/.test(password) || !/[a-z]/.test(password))
+    errors.push({ code: 'INVALID_FORMAT', field: 'password', message: '비밀번호는 대문자와 소문자를 각 1자 이상 포함해야 합니다.' });
+  if (errors.length) return res.status(400).json({ success: false, message: '유효성 검사 실패', errors });
+
+  if (email !== VG_EMAIL || password !== VG_PASSWORD)
+    return res.status(401).json({ success: false, message: '로그인 실패', errors: [{ code: 'INVALID_CREDENTIALS', message: '이메일 또는 비밀번호가 올바르지 않습니다.' }] });
+
+  res.json({ success: true, message: '로그인 성공', data: { token: 'vinyl-token-' + Date.now(), user: { id: 1, email: VG_EMAIL, name: '홍길동' } } });
+});
+
+// 회원가입
+app.post('/vinyl/auth/signup', (req, res) => {
+  const { email, password, name, phone } = req.body || {};
+  const errors = [];
+  if (!email || email.indexOf('@') < 0 || !email.includes('.') || email.slice(0, Math.max(email.indexOf('@'), 0)).includes('.'))
+    errors.push({ code: 'INVALID_FORMAT', field: 'email', message: '올바른 이메일 형식을 입력해주세요.' });
+  if (!password || password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password))
+    errors.push({ code: 'INVALID_PASSWORD', field: 'password', message: '비밀번호는 8자 이상, 대/소문자, 숫자, 특수문자를 각 1자 이상 포함해야 합니다.' });
+  if (!name || !/^[a-zA-Z가-힣]+$/.test(name))
+    errors.push({ code: 'INVALID_FORMAT', field: 'name', message: '이름은 한글 또는 영문만 입력 가능합니다.' });
+  if (errors.length) return res.status(400).json({ success: false, message: '유효성 검사 실패', errors });
+
+  if (email === VG_EMAIL)
+    return res.status(409).json({ success: false, message: '회원가입 실패', errors: [{ code: 'EMAIL_ALREADY_EXISTS', message: '이미 가입된 이메일입니다.' }] });
+
+  res.json({ success: true, message: '회원가입이 완료되었습니다.', data: { id: 2, email, name, phone, createdAt: new Date().toISOString() } });
+});
+
+// 상품 목록 (검색/필터/정렬/limit 또는 페이지네이션)
+app.get('/vinyl/products', (req, res) => {
+  const q = req.query;
+  let list = [...vgProducts];
+
+  if (q.keyword) {
+    const kw = q.keyword.toLowerCase();
+    list = list.filter((p) => p.albumName.toLowerCase().includes(kw) || p.artist.toLowerCase().includes(kw));
+  }
+  if (q.genres) {
+    const set = new Set(q.genres.split(','));
+    list = list.filter((p) => set.has(p.genre));
+  }
+  if (q.conditions) {
+    const set = new Set(q.conditions.split(','));
+    list = list.filter((p) => set.has(p.condition));
+  }
+  if (q.minPrice) list = list.filter((p) => p.price >= Number(q.minPrice));
+  if (q.maxPrice && Number(q.maxPrice) < 1000000) list = list.filter((p) => p.price <= Number(q.maxPrice));
+  if (q.tradeMethod) list = list.filter((p) => p.tradeMethod === q.tradeMethod);
+
+  const sort = q.sort || 'recent';
+  if (sort === 'popular') list.sort((a, b) => b.likeCount - a.likeCount);
+  else if (sort === 'price_asc') list.sort((a, b) => a.price - b.price);
+  else list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const brief = (p) => ({ id: p.id, albumName: p.albumName, artist: p.artist, genre: p.genre, condition: p.condition, price: p.price, tradeMethod: p.tradeMethod, albumImage: p.albumImage, likeCount: p.likeCount, createdAt: p.createdAt });
+
+  if (q.limit) {
+    const data = list.slice(0, Number(q.limit)).map(brief);
+    return res.json({ success: true, data, totalCount: data.length });
+  }
+
+  const page = Number(q.page) || 1;
+  const size = Number(q.size) || 12;
+  const totalCount = list.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / size));
+  const data = list.slice((page - 1) * size, page * size).map(brief);
+  res.json({ success: true, data, pagination: { page, size, totalCount, totalPages, hasNext: page < totalPages } });
+});
+
+// 상품 상세
+app.get('/vinyl/products/:id', (req, res) => {
+  const p = vgProducts.find((x) => x.id === Number(req.params.id));
+  if (!p) return res.status(404).json({ success: false, message: '상품을 찾을 수 없습니다.', errors: [{ code: 'PRODUCT_NOT_FOUND', message: '존재하지 않는 상품입니다.' }] });
+  res.json({ success: true, data: { ...p, conditionDescription: VG_CONDITION_DESC[p.condition] || '' } });
+});
+
 app.get('/', (req, res) => res.send('ConnexChat 서버 동작 중 ✅ (Module B + C, WebSocket 포함)'));
 
 // ════════════════════════════════════════════════════════════
