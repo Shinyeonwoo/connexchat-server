@@ -432,7 +432,18 @@ const vgProducts = vgAlbums.map(([albumName, artist, genre, condition, price, tr
   description: `${artist}의 ${albumName} LP입니다. 소중히 보관해온 음반입니다.`,
   seller: vgSellers[i % vgSellers.length],
   createdAt: new Date(Date.parse('2026-05-01T00:00:00Z') + i * 86400000).toISOString(),
+  // [Module B] 바코드 (EAN-13). 1·2번 상품은 제공된 테스트 샘플 바코드와 동일
+  barcode: i === 0 ? '0011105016919' : i === 1 ? '5099990656019' : String(8800000000000 + i),
 }));
+
+// ── [Module B] 알림 데이터 (가격 변동) ──
+let vgNotifSeq = 5;
+let vgNotifications = [
+  { id: 1, productId: 11, albumName: 'Abbey Road', artist: 'The Beatles', albumImage: vgImg(11), oldPrice: 95000, newPrice: 88000, direction: 'down', read: false, createdAt: new Date(Date.now() - 30 * 60000).toISOString() },
+  { id: 2, productId: 12, albumName: 'Thriller', artist: 'Michael Jackson', albumImage: vgImg(12), oldPrice: 50000, newPrice: 58000, direction: 'up', read: false, createdAt: new Date(Date.now() - 3 * 3600000).toISOString() },
+  { id: 3, productId: 13, albumName: 'Back in Black', artist: 'AC/DC', albumImage: vgImg(13), oldPrice: 42000, newPrice: 35000, direction: 'down', read: false, createdAt: new Date(Date.now() - 8 * 3600000).toISOString() },
+  { id: 4, productId: 9, albumName: 'Kind of Blue', artist: 'Miles Davis', albumImage: vgImg(9), oldPrice: 55000, newPrice: 48000, direction: 'down', read: true, createdAt: new Date(Date.now() - 26 * 3600000).toISOString() },
+];
 
 // 로그인 (검증 규칙: 필수/@/./6자/대문자/소문자)
 app.post('/vinyl/auth/login', (req, res) => {
@@ -477,6 +488,14 @@ app.post('/vinyl/auth/signup', (req, res) => {
 // 상품 목록 (검색/필터/정렬/limit 또는 페이지네이션)
 app.get('/vinyl/products', (req, res) => {
   const q = req.query;
+
+  // [Module B] 바코드 검색: barcode 파라미터가 있으면 그 상품 하나만
+  if (q.barcode) {
+    const p = vgProducts.find((x) => x.barcode === q.barcode);
+    if (!p) return res.status(404).json({ success: false, message: `바코드 "${q.barcode}"에 해당하는 상품을 찾을 수 없습니다`, errors: [{ code: 'PRODUCT_NOT_FOUND' }] });
+    return res.json({ success: true, data: p });
+  }
+
   let list = [...vgProducts];
 
   if (q.keyword) {
@@ -513,6 +532,45 @@ app.get('/vinyl/products', (req, res) => {
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
   const data = list.slice((page - 1) * size, page * size).map(brief);
   res.json({ success: true, data, pagination: { page, size, totalCount, totalPages, hasNext: page < totalPages } });
+});
+
+// ── [Module B] 알림 API ──
+// 알림 목록 (+ 안 읽은 개수)
+app.get('/vinyl/notifications', (req, res) => {
+  const unreadCount = vgNotifications.filter((n) => !n.read).length;
+  res.json({ success: true, data: { notifications: vgNotifications, unreadCount } });
+});
+
+// 읽음 처리: ?id=1 (하나) 또는 ?all=true (전부)
+app.put('/vinyl/notifications/read', (req, res) => {
+  if (req.query.all === 'true') {
+    vgNotifications.forEach((n) => { n.read = true; });
+  } else if (req.query.id) {
+    const n = vgNotifications.find((x) => x.id === Number(req.query.id));
+    if (n) n.read = true;
+  }
+  const unreadCount = vgNotifications.filter((n) => !n.read).length;
+  res.json({ success: true, message: '읽음 처리되었습니다.', data: { unreadCount } });
+});
+
+// 전체 삭제
+app.delete('/vinyl/notifications', (req, res) => {
+  vgNotifications = [];
+  res.json({ success: true, message: '알림이 모두 삭제되었습니다.', data: { unreadCount: 0 } });
+});
+
+// (시연용) 새 알림 하나 만들기 - 수업 때 폴링이 동작하는 걸 보여줄 수 있다
+app.post('/vinyl/notifications/demo', (req, res) => {
+  const p = vgProducts[Math.floor(Math.random() * vgProducts.length)];
+  const drop = p.price > 20000;
+  const n = {
+    id: vgNotifSeq++, productId: p.id, albumName: p.albumName, artist: p.artist,
+    albumImage: p.albumImage, oldPrice: p.price,
+    newPrice: drop ? p.price - 5000 : p.price + 5000,
+    direction: drop ? 'down' : 'up', read: false, createdAt: new Date().toISOString(),
+  };
+  vgNotifications.unshift(n);
+  res.json({ success: true, data: n });
 });
 
 // 상품 상세
