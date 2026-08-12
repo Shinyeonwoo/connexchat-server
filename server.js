@@ -393,6 +393,22 @@ const vgSellers = [
 ];
 
 const vgAlbums = [
+  // [Module C 테스트 대비] ROCK/JAZZ × NM/VG+ 상품을 넉넉히
+  // (FORM 1.1: 필터 적용 후에도 15번째 상품까지 스크롤해야 한다)
+  ['Abbey Road (Remaster)', 'The Beatles', 'ROCK', 'NM', 72000, 'BOTH', 150],
+  ['Led Zeppelin IV', 'Led Zeppelin', 'ROCK', 'VG+', 68000, 'DIRECT', 145],
+  ['A Love Supreme', 'John Coltrane', 'JAZZ', 'NM', 89000, 'DELIVERY', 140],
+  ['Blue Train', 'John Coltrane', 'JAZZ', 'VG+', 61000, 'BOTH', 135],
+  ['Wish You Were Here', 'Pink Floyd', 'ROCK', 'NM', 59000, 'DIRECT', 130],
+  ['Rumours (2nd press)', 'Fleetwood Mac', 'ROCK', 'VG+', 47000, 'DELIVERY', 125],
+  ['Time Out', 'The Dave Brubeck Quartet', 'JAZZ', 'NM', 52000, 'BOTH', 120],
+  ['Mingus Ah Um', 'Charles Mingus', 'JAZZ', 'VG+', 57000, 'DIRECT', 115],
+  ['Nevermind (Reissue)', 'Nirvana', 'ROCK', 'NM', 49000, 'DELIVERY', 110],
+  ['Hotel California', 'Eagles', 'ROCK', 'VG+', 45000, 'BOTH', 105],
+  ['Somethin\' Else', 'Cannonball Adderley', 'JAZZ', 'NM', 63000, 'DIRECT', 100],
+  ['Getz/Gilberto', 'Stan Getz & Joao Gilberto', 'JAZZ', 'VG+', 54000, 'DELIVERY', 95],
+  ['Paranoid', 'Black Sabbath', 'ROCK', 'NM', 58000, 'BOTH', 90],
+  ['Moanin\'', 'Art Blakey', 'JAZZ', 'VG+', 51000, 'DIRECT', 85],
   ['Blonde', 'Frank Ocean', 'RNB_SOUL', 'M', 95000, 'DIRECT', 320],
   ['The Velvet Underground & Nico', 'The Velvet Underground', 'ROCK', 'VG', 125000, 'DELIVERY', 280],
   ['Loveless', 'My Bloody Valentine', 'ROCK', 'NM', 85000, 'BOTH', 250],
