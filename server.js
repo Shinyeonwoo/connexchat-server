@@ -15,7 +15,7 @@ const { WebSocketServer } = require('ws');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // base64 이미지 업로드 대비
 
 // ── 로그인 계정 ──
 const TEST_EMAIL = 'user000@mod.com';
@@ -574,10 +574,135 @@ app.post('/vinyl/notifications/demo', (req, res) => {
 });
 
 // 상품 상세
-app.get('/vinyl/products/:id', (req, res) => {
+app.get('/vinyl/products/:id', (req, res, next) => {
+  if (req.params.id === 'me') return next(); // Module C: /products/me 는 아래 라우트로
   const p = vgProducts.find((x) => x.id === Number(req.params.id));
   if (!p) return res.status(404).json({ success: false, message: '상품을 찾을 수 없습니다.', errors: [{ code: 'PRODUCT_NOT_FOUND', message: '존재하지 않는 상품입니다.' }] });
   res.json({ success: true, data: { ...p, conditionDescription: VG_CONDITION_DESC[p.condition] || '' } });
+});
+
+// ─────────────────────────────────────────────
+// ★★★ [Vinyl Groove - Module C] 상품 등록/관리 ★★★
+//   POST   /vinyl/auth/login/v2   로그인 v2 (v1 과 동일 검증, Module C 명세 경로)
+//   POST   /vinyl/upload/image    base64 이미지 업로드 → imageUrl 리턴
+//   GET    /vinyl/images/:id      업로드된 이미지 서빙 (연습 서버 전용)
+//   POST   /vinyl/products        상품 등록
+//   GET    /vinyl/products/me     내 등록 상품 조회
+//   PUT    /vinyl/products/:id    상품 수정 (연습용 확장 - 명세엔 없음)
+//   DELETE /vinyl/products/:id    상품 삭제
+// ─────────────────────────────────────────────
+
+// 로그인 v2 (Module C 명세 경로 - 검증/응답은 v1 과 동일)
+app.post('/vinyl/auth/login/v2', (req, res) => {
+  const { email, password } = req.body || {};
+  const errors = [];
+  if (!email) errors.push({ code: 'REQUIRED', field: 'email', message: '이메일을 입력해주세요.' });
+  else {
+    const at = email.indexOf('@');
+    if (at < 0 || !email.includes('.') || (at > 0 && email.slice(0, at).includes('.')))
+      errors.push({ code: 'INVALID_FORMAT', field: 'email', message: '올바른 이메일 형식을 입력해주세요.' });
+  }
+  if (!password) errors.push({ code: 'REQUIRED', field: 'password', message: '비밀번호를 입력해주세요.' });
+  else if (password.length < 6) errors.push({ code: 'INVALID_LENGTH', field: 'password', message: '비밀번호는 6자 이상이어야 합니다.' });
+  if (errors.length) return res.status(400).json({ success: false, message: '유효성 검사 실패', errors });
+
+  if (email !== VG_EMAIL || password !== VG_PASSWORD)
+    return res.status(401).json({ success: false, message: '로그인 실패', errors: [{ code: 'INVALID_CREDENTIALS', message: '이메일 또는 비밀번호가 올바르지 않습니다.' }] });
+
+  res.json({ success: true, message: '로그인 성공', data: { token: 'vinyl-token-' + Date.now(), user: { id: 1, email: VG_EMAIL, name: '홍길동' } } });
+});
+
+// 연습용: 기존 상품 2개를 '내(1번 사용자) 등록 상품' 으로 지정 (내 등록 상품 화면 시연용)
+vgProducts[0].ownerId = 1;
+vgProducts[1].ownerId = 1;
+
+// 새 상품 id 시퀀스 (기존 30개 뒤부터)
+let vgSeq = 1000;
+
+// 업로드된 이미지 메모리 보관 (연습 서버라 재시작하면 사라진다)
+let vgUploadSeq = 1;
+const vgUploads = {}; // id -> { mime, buffer }
+
+// 이미지 업로드: body.image = "data:image/png;base64,...."
+app.post('/vinyl/upload/image', (req, res) => {
+  const { image, type } = req.body || {};
+  const m = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(image || '');
+  if (!m) return res.status(400).json({ success: false, message: '유효성 검사 실패', errors: [{ code: 'INVALID_FORMAT', message: '올바른 이미지 형식이 아닙니다.' }] });
+  const buffer = Buffer.from(m[2], 'base64');
+  if (buffer.length > 5 * 1024 * 1024)
+    return res.status(413).json({ success: false, message: '이미지가 너무 큽니다.', errors: [{ code: 'PAYLOAD_TOO_LARGE', message: '5MB 이하 이미지만 업로드할 수 있습니다.' }] });
+  const id = vgUploadSeq++;
+  vgUploads[id] = { mime: m[1], buffer };
+  res.status(201).json({
+    success: true,
+    message: '이미지가 업로드되었습니다.',
+    data: {
+      imageUrl: `https://${req.get('host')}/vinyl/images/${id}`,
+      type: type || 'ALBUM',
+      size: buffer.length,
+      uploadedAt: new Date().toISOString(),
+    },
+  });
+});
+
+// 업로드 이미지 서빙
+app.get('/vinyl/images/:id', (req, res) => {
+  const up = vgUploads[req.params.id];
+  if (!up) return res.status(404).end();
+  res.set('Content-Type', up.mime).send(up.buffer);
+});
+
+// 상품 등록 (등록자 = 로그인 사용자 1번 고정)
+app.post('/vinyl/products', (req, res) => {
+  const { albumName, artist, genre, condition, price, tradeMethod, barcode, description, imageUrl } = req.body || {};
+  const errors = [];
+  if (!albumName) errors.push({ code: 'REQUIRED', field: 'albumName', message: '앨범명을 입력해주세요.' });
+  if (!artist) errors.push({ code: 'REQUIRED', field: 'artist', message: '아티스트를 입력해주세요.' });
+  if (!genre) errors.push({ code: 'REQUIRED', field: 'genre', message: '장르를 선택해주세요.' });
+  if (!condition) errors.push({ code: 'REQUIRED', field: 'condition', message: '음반 상태를 선택해주세요.' });
+  if (price == null || isNaN(Number(price)) || Number(price) <= 0)
+    errors.push({ code: 'INVALID_FORMAT', field: 'price', message: '가격을 올바르게 입력해주세요.' });
+  if (!tradeMethod) errors.push({ code: 'REQUIRED', field: 'tradeMethod', message: '거래 방식을 선택해주세요.' });
+  if (errors.length) return res.status(400).json({ success: false, message: '유효성 검사 실패', errors });
+
+  const p = {
+    id: vgSeq++,
+    albumName, artist, genre, condition,
+    price: Number(price),
+    tradeMethod,
+    likeCount: 0,
+    albumImage: imageUrl || vgImg(1),
+    description: description || '',
+    barcode: barcode || null,
+    ownerId: 1, // 연습 서버: 항상 1번 사용자 소유
+    seller: { id: 1, name: '홍길동', email: VG_EMAIL, profileImage: vgImg(1) },
+    createdAt: new Date().toISOString(),
+  };
+  vgProducts.unshift(p);
+  res.status(201).json({ success: true, message: '상품이 등록되었습니다.', data: p });
+});
+
+// 내 등록 상품 조회
+app.get('/vinyl/products/me', (req, res) => {
+  res.json({ success: true, data: { products: vgProducts.filter((p) => p.ownerId === 1) } });
+});
+
+// 상품 수정 (연습용 확장)
+app.put('/vinyl/products/:id', (req, res) => {
+  const p = vgProducts.find((x) => x.id === Number(req.params.id));
+  if (!p) return res.status(404).json({ success: false, message: '상품을 찾을 수 없습니다.', errors: [{ code: 'PRODUCT_NOT_FOUND', message: '존재하지 않는 상품입니다.' }] });
+  const allow = ['albumName', 'artist', 'genre', 'condition', 'price', 'tradeMethod', 'barcode', 'description'];
+  for (const k of allow) if (req.body && req.body[k] != null) p[k] = k === 'price' ? Number(req.body[k]) : req.body[k];
+  if (req.body && req.body.imageUrl) p.albumImage = req.body.imageUrl;
+  res.json({ success: true, message: '상품이 수정되었습니다.', data: p });
+});
+
+// 상품 삭제
+app.delete('/vinyl/products/:id', (req, res) => {
+  const i = vgProducts.findIndex((x) => x.id === Number(req.params.id));
+  if (i < 0) return res.status(404).json({ success: false, message: '상품을 찾을 수 없습니다.', errors: [{ code: 'PRODUCT_NOT_FOUND', message: '존재하지 않는 상품입니다.' }] });
+  vgProducts.splice(i, 1);
+  res.json({ success: true, message: '상품이 삭제되었습니다.' });
 });
 
 app.get('/', (req, res) => res.send('ConnexChat 서버 동작 중 ✅ (Module B + C, WebSocket 포함)'));
