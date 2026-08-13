@@ -453,12 +453,15 @@ const vgProducts = vgAlbums.map(([albumName, artist, genre, condition, price, tr
 }));
 
 // ── [Module B] 알림 데이터 (가격 변동) ──
-let vgNotifSeq = 5;
+let vgNotifSeq = 7;
+// 5시간 이상 지난 알림은 이미 읽은 것으로 시드한다 (미확인 점이 안 붙게)
 let vgNotifications = [
   { id: 1, productId: 11, albumName: 'Abbey Road', artist: 'The Beatles', albumImage: vgImg(11), oldPrice: 95000, newPrice: 88000, direction: 'down', read: false, createdAt: new Date(Date.now() - 30 * 60000).toISOString() },
-  { id: 2, productId: 12, albumName: 'Thriller', artist: 'Michael Jackson', albumImage: vgImg(12), oldPrice: 50000, newPrice: 58000, direction: 'up', read: false, createdAt: new Date(Date.now() - 3 * 3600000).toISOString() },
-  { id: 3, productId: 13, albumName: 'Back in Black', artist: 'AC/DC', albumImage: vgImg(13), oldPrice: 42000, newPrice: 35000, direction: 'down', read: false, createdAt: new Date(Date.now() - 8 * 3600000).toISOString() },
-  { id: 4, productId: 9, albumName: 'Kind of Blue', artist: 'Miles Davis', albumImage: vgImg(9), oldPrice: 55000, newPrice: 48000, direction: 'down', read: true, createdAt: new Date(Date.now() - 26 * 3600000).toISOString() },
+  { id: 2, productId: 12, albumName: 'Thriller', artist: 'Michael Jackson', albumImage: vgImg(12), oldPrice: 50000, newPrice: 58000, direction: 'up', read: false, createdAt: new Date(Date.now() - 2 * 3600000).toISOString() },
+  { id: 3, productId: 13, albumName: 'Back in Black', artist: 'AC/DC', albumImage: vgImg(13), oldPrice: 42000, newPrice: 35000, direction: 'down', read: false, createdAt: new Date(Date.now() - 3 * 3600000).toISOString() },
+  { id: 4, productId: 9, albumName: 'Kind of Blue', artist: 'Miles Davis', albumImage: vgImg(9), oldPrice: 55000, newPrice: 48000, direction: 'down', read: true, createdAt: new Date(Date.now() - 5 * 3600000).toISOString() },
+  { id: 5, productId: 7, albumName: 'The Dark Side of the Moon', artist: 'Pink Floyd', albumImage: vgImg(7), oldPrice: 52000, newPrice: 48000, direction: 'down', read: true, createdAt: new Date(Date.now() - 8 * 3600000).toISOString() },
+  { id: 6, productId: 15, albumName: 'Nevermind', artist: 'Nirvana', albumImage: vgImg(15), oldPrice: 40000, newPrice: 45000, direction: 'up', read: true, createdAt: new Date(Date.now() - 26 * 3600000).toISOString() },
 ];
 
 // 로그인 (검증 규칙: 필수/@/./6자/대문자/소문자)
